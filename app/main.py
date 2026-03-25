@@ -47,12 +47,61 @@ async def lifespan(app: FastAPI):
     print("👋 Shutting down chatbot backend...")
 
 
-# Create FastAPI app
+# Create FastAPI app with production-ready Swagger UI
 app = FastAPI(
     title="FODOWA Chatbot API",
-    description="Production-ready FAQ chatbot with fixed priority questions",
+    description="""
+## Production-ready FAQ Chatbot API
+
+This API provides intelligent FAQ matching with priority fixed questions.
+
+### Features
+- **Fixed FAQ Priority**: 4 questions always matched first
+- **Fuzzy Matching**: difflib-based text similarity
+- **Multi-language**: Arabic and English support
+- **Low Memory**: Optimized for Render Free Tier (512MB)
+
+### Quick Start
+1. Use `/chat` to ask questions
+2. Use `/health` to check system status
+3. Use `/validate` for detailed match analysis
+
+### Fixed Priority Questions
+1. ما هي منصة فودوا؟
+2. ما هي اللغات المتوفرة؟
+3. هل الموقع آمن؟
+4. كيف أبدأ؟
+""",
     version="1.0.0",
-    lifespan=lifespan
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+    tags_metadata=[
+        {
+            "name": "Chat",
+            "description": "Chatbot interaction endpoints for asking questions.",
+        },
+        {
+            "name": "Health",
+            "description": "System health and status monitoring.",
+        },
+        {
+            "name": "Validation",
+            "description": "Detailed match analysis for testing.",
+        },
+        {
+            "name": "Logging",
+            "description": "Request logging and statistics.",
+        },
+        {
+            "name": "Integration",
+            "description": "Company API integration preparation.",
+        },
+        {
+            "name": "Root",
+            "description": "Root endpoint serving the chat UI.",
+        },
+    ]
 )
 
 # Enable CORS for production
@@ -66,16 +115,39 @@ app.add_middleware(
 
 
 # Request/Response Models
+from pydantic import Field
+
+
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
-    question: str
+    question: str = Field(
+        ...,
+        description="User's question to the chatbot",
+        example="ما هي منصة فودوا؟",
+        min_length=1,
+        max_length=500
+    )
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
-    answer: str
-    confidence: float
-    matched_question: Optional[str] = None
+    answer: str = Field(
+        ...,
+        description="Chatbot's answer to the question",
+        example="فودوا هي منصة ذكية متكاملة تقدم حلولاً تقنية متقدمة للشركات والأفراد."
+    )
+    confidence: float = Field(
+        ...,
+        description="Confidence score between 0.0 and 1.0",
+        example=0.95,
+        ge=0.0,
+        le=1.0
+    )
+    matched_question: Optional[str] = Field(
+        None,
+        description="The FAQ question that was matched",
+        example="ما هي منصة فودوا؟"
+    )
 
 
 class CompanyIntegrationRequest(BaseModel):
@@ -98,7 +170,30 @@ async def root() -> HTMLResponse:
     return HTMLResponse(content=html_content)
 
 
-@app.get("/health", tags=["Health"])
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Check system health",
+    description="Returns the current health status of the chatbot system.",
+    responses={
+        200: {
+            "description": "System is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "faq_loaded": True,
+                        "faq_count": 45,
+                        "fixed_faq_count": 4,
+                        "memory_usage": "low",
+                        "ready": True
+                    }
+                }
+            }
+        },
+        503: {"description": "System is unhealthy"}
+    }
+)
 async def health_check() -> Dict[str, Any]:
     """
     Health check endpoint for monitoring and Render deployment.
@@ -124,7 +219,40 @@ async def health_check() -> Dict[str, Any]:
         )
 
 
-@app.post("/chat", response_model=ChatResponse, tags=["Chat"])
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+    tags=["Chat"],
+    summary="Ask the chatbot a question",
+    description="""
+Send a question to the chatbot and receive an answer.
+
+**Features:**
+- Fixed FAQ questions have priority
+- Fuzzy matching for typos
+- Confidence scoring
+
+**Example:**
+```json
+{"question": "ما هي منصة فودوا؟"}
+```
+""",
+    responses={
+        200: {
+            "description": "Successful response with answer",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "answer": "فودوا هي منصة ذكية متكاملة...",
+                        "confidence": 1.0,
+                        "matched_question": "ما هي منصة فودوا؟"
+                    }
+                }
+            }
+        },
+        400: {"description": "Bad request - empty question"}
+    }
+)
 async def chat(request: ChatRequest) -> ChatResponse:
     """
     Chat endpoint - returns chatbot response for user question.

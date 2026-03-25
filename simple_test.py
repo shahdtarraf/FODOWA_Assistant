@@ -86,7 +86,8 @@ def test():
         print("\n6. Testing POST /chat (empty)...")
         try:
             r = c.post('/chat', json={'question': ''})
-            assert r.status_code == 400
+            # Pydantic validation returns 422, our custom validation returns 400
+            assert r.status_code in [400, 422]
             print("   ✅ PASSED: Rejects empty question")
             passed += 1
         except Exception as e:
