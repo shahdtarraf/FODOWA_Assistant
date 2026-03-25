@@ -51,19 +51,62 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FODOWA Chatbot API",
     description="""
-## FAQ Chatbot API
+## 🤖 FAQ Chatbot API
 
 Intelligent FAQ matching with priority questions and fuzzy matching.
 
-### Features
-- 4 fixed priority questions
-- Fuzzy matching for typos
-- Confidence scoring (0.0-1.0)
+---
 
-### Quick Test
-```json
-{"question": "ما هي منصة فودوا؟"}
+### 🎯 What This API Does
+Provides instant answers to user questions using smart FAQ matching - no AI/ML required.
+
+---
+
+### ⚙️ How It Works
+
+1. **Priority Matching**: 4 fixed questions always matched first with confidence = 1.0
+2. **Fuzzy Matching**: Handles typos using difflib similarity (confidence 0.5-0.99)
+3. **Fallback**: No match returns default message (confidence < 0.15)
+
+---
+
+### 📊 Confidence Score Guide
+
+| Score | Meaning |
+|-------|--------|
+| **1.0** | Exact match - 100% confident |
+| **0.5-0.99** | Strong match - high confidence |
+| **0.15-0.49** | Weak match - may need review |
+| **<0.15** | No match - fallback response |
+
+---
+
+### 🔒 Fixed Priority Questions
+
+These 4 questions ALWAYS have priority:
+
+1. **ما هي منصة فودوا؟**
+2. **ما هي اللغات المتوفرة؟**
+3. **هل الموقع آمن؟**
+4. **كيف أبدأ؟**
+
+---
+
+### 🚀 Quick Test
+
+```bash
+curl -X POST https://fodowa-assistant.onrender.com/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{"question": "ما هي منصة فودوا؟"}'
 ```
+
+---
+
+### 👥 Who Should Use This
+
+- **Developers**: Integrate chatbot into your apps
+- **Companies**: Add FAQ support to your services
+- **Testers**: Use `/validate` for detailed analysis
 """,
     version="1.0.0",
     docs_url="/docs",
@@ -72,23 +115,23 @@ Intelligent FAQ matching with priority questions and fuzzy matching.
     tags_metadata=[
         {
             "name": "Chat",
-            "description": "Chatbot interaction endpoints.",
+            "description": "Chatbot interaction endpoints for asking questions.",
         },
         {
             "name": "Health",
-            "description": "System health monitoring.",
+            "description": "System health monitoring and status checks.",
         },
         {
             "name": "Validation",
-            "description": "Detailed match analysis for testing.",
+            "description": "Detailed match analysis for testing and debugging.",
         },
         {
             "name": "Logs",
-            "description": "Request logging and statistics.",
+            "description": "Request logging and statistics retrieval.",
         },
         {
             "name": "Integration",
-            "description": "Company API integration preparation.",
+            "description": "Company API integration preparation endpoints.",
         },
     ]
 )
