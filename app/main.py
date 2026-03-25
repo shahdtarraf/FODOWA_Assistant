@@ -51,26 +51,35 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FODOWA Chatbot API",
     description="""
-## Production-ready FAQ Chatbot API
+## 🤖 Intelligent FAQ Chatbot API
 
-This API provides intelligent FAQ matching with priority fixed questions.
+### What This API Does
+Provides instant answers to user questions using smart FAQ matching - no AI/ML required.
 
-### Features
-- **Fixed FAQ Priority**: 4 questions always matched first
-- **Fuzzy Matching**: difflib-based text similarity
-- **Multi-language**: Arabic and English support
-- **Low Memory**: Optimized for Render Free Tier (512MB)
+### How It Works
+1. **Priority Matching**: 4 fixed questions always matched first
+2. **Fuzzy Matching**: Handles typos using difflib similarity
+3. **Confidence Scoring**: Returns match quality (0.0-1.0)
+
+### Who Should Use This
+- **Developers**: Integrate chatbot into your apps
+- **Companies**: Add FAQ support to your services
+- **Testers**: Use `/validate` for detailed analysis
+
+### Confidence Score Guide
+| Score | Meaning |
+|-------|--------|
+| **1.0** | Exact match - 100% confident |
+| **0.5-0.99** | Strong match - high confidence |
+| **0.15-0.49** | Weak match - may need review |
+| **<0.15** | No match - fallback response |
 
 ### Quick Start
-1. Use `/chat` to ask questions
-2. Use `/health` to check system status
-3. Use `/validate` for detailed match analysis
-
-### Fixed Priority Questions
-1. ما هي منصة فودوا؟
-2. ما هي اللغات المتوفرة؟
-3. هل الموقع آمن؟
-4. كيف أبدأ؟
+```bash
+curl -X POST https://your-app.onrender.com/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "ما هي منصة فودوا؟"}'
+```
 """,
     version="1.0.0",
     docs_url="/docs",
@@ -78,28 +87,16 @@ This API provides intelligent FAQ matching with priority fixed questions.
     lifespan=lifespan,
     tags_metadata=[
         {
-            "name": "Chat",
-            "description": "Chatbot interaction endpoints for asking questions.",
+            "name": "Core",
+            "description": "**Main endpoints** for chatbot interaction and system status.",
         },
         {
-            "name": "Health",
-            "description": "System health and status monitoring.",
-        },
-        {
-            "name": "Validation",
-            "description": "Detailed match analysis for testing.",
-        },
-        {
-            "name": "Logging",
-            "description": "Request logging and statistics.",
+            "name": "Debug",
+            "description": "Testing and debugging tools for developers.",
         },
         {
             "name": "Integration",
-            "description": "Company API integration preparation.",
-        },
-        {
-            "name": "Root",
-            "description": "Root endpoint serving the chat UI.",
+            "description": "Company API integration preparation endpoints.",
         },
     ]
 )
@@ -159,10 +156,28 @@ class CompanyIntegrationRequest(BaseModel):
 
 # API Endpoints
 
-@app.get("/", tags=["Root"])
+@app.get(
+    "/",
+    tags=["Core"],
+    summary="Chatbot Web Interface",
+    description="""
+Serves the interactive chatbot web interface (HTML page).
+
+**Returns:** HTML page with Arabic chat UI
+
+**Note:** This endpoint returns HTML, not JSON. Visit in browser to use the chat interface.
+""",
+    response_class=HTMLResponse,
+    responses={
+        200: {
+            "description": "HTML chat interface",
+            "content": {"text/html": {"example": "<!DOCTYPE html>..."}}
+        }
+    }
+)
 async def root() -> HTMLResponse:
     """
-    Root endpoint - serves the chat UI.
+    Root endpoint - serves the chat UI (HTML page).
     """
     static_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'index.html')
     with open(static_path, 'r', encoding='utf-8') as f:
@@ -172,9 +187,21 @@ async def root() -> HTMLResponse:
 
 @app.get(
     "/health",
-    tags=["Health"],
-    summary="Check system health",
-    description="Returns the current health status of the chatbot system.",
+    tags=["Core"],
+    summary="Check System Health",
+    description="""
+Returns the current health status of the chatbot system.
+
+### Response Fields
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | System state: "healthy" or "unhealthy" |
+| `faq_loaded` | boolean | True if FAQ data is loaded |
+| `faq_count` | integer | Total number of FAQ entries |
+| `fixed_faq_count` | integer | Number of priority questions (always 4) |
+| `memory_usage` | string | Memory optimization status |
+| `ready` | boolean | System ready to accept requests |
+""",
     responses={
         200: {
             "description": "System is healthy",
@@ -222,19 +249,34 @@ async def health_check() -> Dict[str, Any]:
 @app.post(
     "/chat",
     response_model=ChatResponse,
-    tags=["Chat"],
-    summary="Ask the chatbot a question",
+    tags=["Core"],
+    summary="Ask a Question",
     description="""
-Send a question to the chatbot and receive an answer.
+Send a question to the chatbot and receive an intelligent answer.
 
-**Features:**
-- Fixed FAQ questions have priority
-- Fuzzy matching for typos
-- Confidence scoring
+### Matching Behavior
+1. **Priority**: Fixed FAQ questions matched first (confidence = 1.0)
+2. **Fuzzy**: Handles typos and partial matches (confidence = 0.5-0.99)
+3. **Fallback**: No match returns default message (confidence < 0.15)
 
-**Example:**
+### Examples
+
+**Example 1: Exact Match (Arabic)**
 ```json
-{"question": "ما هي منصة فودوا؟"}
+Input:  {"question": "ما هي منصة فودوا؟"}
+Output: {"answer": "فودوا هي منصة ذكية...", "confidence": 1.0}
+```
+
+**Example 2: Fuzzy Match (Typo)**
+```json
+Input:  {"question": "ما هي منصه فودوا"}
+Output: {"answer": "فودوا هي منصة ذكية...", "confidence": 0.85}
+```
+
+**Example 3: English Question**
+```json
+Input:  {"question": "What is Fodowa?"}
+Output: {"answer": "FODOWA is an intelligent platform...", "confidence": 0.72}
 ```
 """,
     responses={
@@ -242,10 +284,31 @@ Send a question to the chatbot and receive an answer.
             "description": "Successful response with answer",
             "content": {
                 "application/json": {
-                    "example": {
-                        "answer": "فودوا هي منصة ذكية متكاملة...",
-                        "confidence": 1.0,
-                        "matched_question": "ما هي منصة فودوا؟"
+                    "examples": {
+                        "exact_match": {
+                            "summary": "Exact match - Priority FAQ",
+                            "value": {
+                                "answer": "فودوا هي منصة ذكية متكاملة تقدم حلولاً تقنية متقدمة للشركات والأفراد.",
+                                "confidence": 1.0,
+                                "matched_question": "ما هي منصة فودوا؟"
+                            }
+                        },
+                        "fuzzy_match": {
+                            "summary": "Fuzzy match - Typo handled",
+                            "value": {
+                                "answer": "فودوا هي منصة ذكية متكاملة...",
+                                "confidence": 0.85,
+                                "matched_question": "ما هي منصة فودوا؟"
+                            }
+                        },
+                        "no_match": {
+                            "summary": "No match - Fallback response",
+                            "value": {
+                                "answer": "I'm sorry, I don't have information about that topic.",
+                                "confidence": 0.07,
+                                "matched_question": None
+                            }
+                        }
                     }
                 }
             }
@@ -287,7 +350,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
     )
 
 
-@app.post("/validate", response_model=ValidationResult, tags=["Validation"])
+@app.post(
+    "/validate",
+    response_model=ValidationResult,
+    tags=["Debug"],
+    summary="Detailed Match Analysis",
+    description="""
+Get detailed match analysis for testing and debugging.
+
+Returns the same answer as `/chat` but with additional debugging info:
+- Score breakdown (keyword, substring, fuzzy)
+- Matched FAQ ID
+- Confidence label
+
+**Use this for:** Testing accuracy, debugging matches, tuning thresholds.
+"""
+)
 async def validate(request: ValidationRequest) -> ValidationResult:
     """
     Validation endpoint for testing chatbot accuracy.
@@ -319,7 +397,17 @@ async def validate(request: ValidationRequest) -> ValidationResult:
     return ValidationResult(**result)
 
 
-@app.get("/logs", tags=["Logging"])
+@app.get(
+    "/logs",
+    tags=["Debug"],
+    summary="Get Request Logs",
+    description="""
+Retrieve recent chatbot request logs for debugging.
+
+**Query Parameters:**
+- `limit`: Number of logs to return (1-100, default: 50)
+"""
+)
 async def get_logs(limit: int = 50) -> Dict[str, Any]:
     """
     Retrieve recent chatbot request logs.
@@ -343,7 +431,12 @@ async def get_logs(limit: int = 50) -> Dict[str, Any]:
     }
 
 
-@app.delete("/logs", tags=["Logging"])
+@app.delete(
+    "/logs",
+    tags=["Debug"],
+    summary="Clear All Logs",
+    description="Clear all stored request logs."
+)
 async def clear_logs() -> Dict[str, Any]:
     """
     Clear all stored logs.
@@ -419,7 +512,18 @@ def send_to_company_api(
     }
 
 
-@app.post("/integration/prepare", tags=["Integration"])
+@app.post(
+    "/integration/prepare",
+    tags=["Integration"],
+    summary="Prepare Company API Integration",
+    description="""
+Prepare a message payload for company API integration.
+
+**Does NOT send the message** - returns prepared payload with headers.
+
+Use this to format messages before sending to your company's API.
+"""
+)
 async def prepare_company_integration(request: CompanyIntegrationRequest) -> Dict[str, Any]:
     """
     Prepare a message for company API integration.
